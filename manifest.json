@@ -1,0 +1,18 @@
+{
+  "domain": "typhur_sync_gold_ble",
+  "name": "Typhur Sync Gold BLE",
+  "version": "0.1.0",
+  "config_flow": true,
+  "documentation": "https://github.com/miguelcaravantes/ha-typhur-sync-gold-ble",
+  "issue_tracker": "https://github.com/miguelcaravantes/ha-typhur-sync-gold-ble/issues",
+  "codeowners": ["@miguelcaravantes"],
+  "dependencies": ["bluetooth"],
+  "integration_type": "device",
+  "iot_class": "local_push",
+  "bluetooth": [
+    {
+      "local_name": "Typhur-*"
+    }
+  ],
+  "requirements": ["bleak_retry_connector>=3.6.0", "bleak>=0.22.0"]
+}

@@ -1,0 +1,96 @@
+{
+  "title": "Typhur Sync Gold BLE",
+  "config": {
+    "step": {
+      "bluetooth_confirm": {
+        "title": "Add {name}?",
+        "description": "Set up this Typhur Sync Gold BLE thermometer in Home Assistant."
+      },
+      "user": {
+        "title": "Select Typhur Sync Gold",
+        "description": "Select a discovered Typhur Sync Gold BLE device.",
+        "data": {
+          "address": "Device"
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "This Typhur device is already configured.",
+      "no_devices_found": "No Typhur Sync Gold BLE devices were found.",
+      "not_supported": "This Bluetooth device is not a supported Typhur Sync Gold device.",
+      "unknown": "Unexpected error"
+    }
+  },
+  "entity": {
+    "sensor": {
+      "base_battery": {
+        "name": "Base battery"
+      },
+      "wifi_rssi": {
+        "name": "Wi-Fi RSSI"
+      },
+      "last_set_temperature": {
+        "name": "Last set temperature"
+      },
+      "battery_status": {
+        "name": "Battery status"
+      },
+      "volume": {
+        "name": "Volume"
+      },
+      "connection_status": {
+        "name": "Connection status"
+      },
+      "probe_core_temperature": {
+        "name": "Core temperature"
+      },
+      "probe_ambient_temperature": {
+        "name": "Ambient temperature"
+      },
+      "probe_battery": {
+        "name": "Battery"
+      },
+      "probe_target_temperature": {
+        "name": "Target temperature"
+      },
+      "probe_cooking_state": {
+        "name": "Cooking state"
+      },
+      "probe_cooking_mode": {
+        "name": "Cooking mode"
+      },
+      "probe_engaged_status": {
+        "name": "Engaged status"
+      },
+      "probe_current_cook_time": {
+        "name": "Current cook time"
+      },
+      "probe_remaining_cook_time": {
+        "name": "Remaining cook time"
+      },
+      "probe_area_temperature_1": {
+        "name": "Area temperature 1"
+      },
+      "probe_area_temperature_2": {
+        "name": "Area temperature 2"
+      },
+      "probe_area_temperature_3": {
+        "name": "Area temperature 3"
+      },
+      "probe_area_temperature_4": {
+        "name": "Area temperature 4"
+      },
+      "probe_area_temperature_5": {
+        "name": "Area temperature 5"
+      }
+    },
+    "binary_sensor": {
+      "online": {
+        "name": "Online"
+      },
+      "wifi_configured": {
+        "name": "Wi-Fi configured"
+      }
+    }
+  }
+}
