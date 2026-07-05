@@ -379,6 +379,7 @@ class TyphurBleClient:
         self._last_status: BaseStationStatus | None = None
         self._last_user_id: str | None = None
         self._status_event = asyncio.Event()
+        self._disconnect_expected = False
 
     @property
     def is_connected(self) -> bool:
@@ -424,7 +425,11 @@ class TyphurBleClient:
             self._client = None
             with suppress(BleakError, TimeoutError):
                 if client is not None and client.is_connected:
-                    await client.disconnect()
+                    self._disconnect_expected = True
+                    try:
+                        await client.disconnect()
+                    finally:
+                        self._disconnect_expected = False
             raise TyphurConnectionError(f"Failed to connect to {self.address}: {err}") from err
 
     async def disconnect(self) -> None:
@@ -437,10 +442,16 @@ class TyphurBleClient:
             return
         try:
             if client.is_connected:
-                await client.stop_notify(NOTIFY_CHARACTERISTIC_UUID)
-                await client.disconnect()
+                self._disconnect_expected = True
+                try:
+                    await client.stop_notify(NOTIFY_CHARACTERISTIC_UUID)
+                    await client.disconnect()
+                finally:
+                    self._disconnect_expected = False
         except (BleakError, TimeoutError) as err:
             _LOGGER.debug("Error while disconnecting from %s: %s", self.address, err)
+        finally:
+            self._disconnect_expected = False
 
     async def authenticate(
         self, user_id: str | None, device_type: str | None
@@ -882,8 +893,12 @@ class TyphurBleClient:
 
     def _disconnected(self, _client: BleakClient) -> None:
         """Handle a BLE disconnect."""
+        expected = self._disconnect_expected
         self._client = None
         self._reset_protocol_state()
         self._cancel_pending(TyphurConnectionError("BLE device disconnected"))
+        if expected:
+            _LOGGER.debug("Expected Typhur BLE disconnect from %s", self.address)
+            return
         if self._unavailable_callback is not None:
             self._unavailable_callback()

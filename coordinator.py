@@ -51,6 +51,7 @@ class TyphurDataUpdateCoordinator(DataUpdateCoordinator[BaseStationStatus | None
             unavailable_callback=self._async_device_unavailable,
         )
         self._unavailable_cancel: Callable[[], None] | None = None
+        self._unavailable_refresh_task: asyncio.Task[None] | None = None
         super().__init__(
             hass,
             _LOGGER,
@@ -123,6 +124,9 @@ class TyphurDataUpdateCoordinator(DataUpdateCoordinator[BaseStationStatus | None
 
     async def async_shutdown(self) -> None:
         """Shut down coordinator resources."""
+        if self._unavailable_refresh_task is not None:
+            self._unavailable_refresh_task.cancel()
+            self._unavailable_refresh_task = None
         if self._unavailable_cancel is not None:
             self._unavailable_cancel()
             self._unavailable_cancel = None
@@ -162,7 +166,26 @@ class TyphurDataUpdateCoordinator(DataUpdateCoordinator[BaseStationStatus | None
     @callback
     def _async_device_unavailable(self) -> None:
         """Handle client-level unavailable notifications."""
-        self.async_set_updated_data(None)
+        if (
+            self._unavailable_refresh_task is not None
+            and not self._unavailable_refresh_task.done()
+        ):
+            return
+        _LOGGER.warning(
+            "Typhur %s: BLE connection became unavailable; scheduling reconnect",
+            self.address,
+        )
+        self._unavailable_refresh_task = self.hass.async_create_task(
+            self._async_refresh_after_unavailable()
+        )
+
+    async def _async_refresh_after_unavailable(self) -> None:
+        """Request a coordinator refresh after a transient BLE unavailable event."""
+        try:
+            await asyncio.sleep(1.0)
+            await self.async_request_refresh()
+        finally:
+            self._unavailable_refresh_task = None
 
     @callback
     def _async_unavailable_callback(
