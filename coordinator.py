@@ -71,38 +71,55 @@ class TyphurDataUpdateCoordinator(DataUpdateCoordinator[BaseStationStatus | None
     async def _async_update_data(self) -> BaseStationStatus | None:
         """Fetch the latest data from the BLE device."""
         try:
-            await self.client.connect()
-            
-            # Authenticate and capture any discovered user_id
-            auth_result = await self.client.authenticate(self.user_id, self.device_type)
-            
-            # If we discovered a new user_id, save it and retry auth
-            if auth_result.user_id and auth_result.user_id != self.user_id:
-                _LOGGER.warning(
-                    "Typhur %s: discovered user ID %s, saving and retrying auth",
-                    self.address,
-                    auth_result.user_id,
-                )
-                self.user_id = auth_result.user_id
-                self._async_update_entry_data({CONF_USER_ID: self.user_id})
-                # Wait before retrying authentication
-                await asyncio.sleep(0.5)
-                # Retry authentication with the correct user_id
-                auth_result = await self.client.authenticate(self.user_id, self.device_type)
+            return await self._async_fetch_status()
+        except (TyphurConnectionError, TyphurError) as first_err:
+            _LOGGER.warning(
+                "Typhur %s: update failed, resetting BLE session and retrying once: %s",
+                self.address,
+                first_err,
+            )
+            await self.client.disconnect()
+            await asyncio.sleep(1.0)
+            try:
+                return await self._async_fetch_status()
+            except (TyphurConnectionError, TyphurError) as err:
+                await self.client.disconnect()
+                raise UpdateFailed(
+                    f"Error communicating with Typhur device: {err}"
+                ) from err
 
-            if auth_result.device_type and auth_result.device_type != self.device_type:
-                self.device_type = auth_result.device_type
-                self._async_update_entry_data({CONF_DEVICE_TYPE: self.device_type})
+    async def _async_fetch_status(self) -> BaseStationStatus:
+        """Fetch the latest status from a fresh or existing BLE session."""
+        await self.client.connect()
 
-            discovered_type = self.device_type or device_type_from_name(self.name) or DEFAULT_DEVICE_TYPE
+        # Authenticate and capture any discovered user_id
+        auth_result = await self.client.authenticate(self.user_id, self.device_type)
 
-            # Wait before requesting status
+        # If we discovered a new user_id, save it and retry auth
+        if auth_result.user_id and auth_result.user_id != self.user_id:
+            _LOGGER.warning(
+                "Typhur %s: discovered user ID %s, saving and retrying auth",
+                self.address,
+                auth_result.user_id,
+            )
+            self.user_id = auth_result.user_id
+            self._async_update_entry_data({CONF_USER_ID: self.user_id})
+            # Wait before retrying authentication
             await asyncio.sleep(0.5)
-            status = await self.client.request_status(discovered_type)
-            self._async_apply_status(status)
-            return status
-        except (TyphurConnectionError, TyphurError) as err:
-            raise UpdateFailed(f"Error communicating with Typhur device: {err}") from err
+            # Retry authentication with the correct user_id
+            auth_result = await self.client.authenticate(self.user_id, self.device_type)
+
+        if auth_result.device_type and auth_result.device_type != self.device_type:
+            self.device_type = auth_result.device_type
+            self._async_update_entry_data({CONF_DEVICE_TYPE: self.device_type})
+
+        discovered_type = self.device_type or device_type_from_name(self.name) or DEFAULT_DEVICE_TYPE
+
+        # Wait before requesting status
+        await asyncio.sleep(0.5)
+        status = await self.client.request_status(discovered_type)
+        self._async_apply_status(status)
+        return status
 
     async def async_shutdown(self) -> None:
         """Shut down coordinator resources."""

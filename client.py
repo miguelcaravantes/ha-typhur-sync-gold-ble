@@ -125,11 +125,14 @@ class FragmentAssembler:
 
         if self._expected_length is None:
             raise TyphurProtocolError("Fragment state was reset unexpectedly")
-        
+
         if len(self._buffer) != self._expected_length:
+            expected_length = self._expected_length
+            actual_length = len(self._buffer)
+            self.reset()
             raise TyphurProtocolError(
                 "Fragment length mismatch: "
-                f"expected {self._expected_length}, got {len(self._buffer)}"
+                f"expected {expected_length}, got {actual_length}"
             )
 
         complete = bytes(self._buffer)
@@ -793,6 +796,9 @@ class TyphurBleClient:
             if not isinstance(message, dict):
                 raise TyphurProtocolError("Decoded notification is not a JSON object")
             self._handle_message(message)
+        except TyphurProtocolError as err:
+            self._fragment_assembler.reset()
+            _LOGGER.warning("Failed to process Typhur frame: %s", err)
         except (json.JSONDecodeError, TyphurError, TyphurParseError) as err:
             _LOGGER.warning("Failed to process Typhur frame: %s", err)
 
