@@ -3,12 +3,13 @@
 [![GitHub Release](https://img.shields.io/github/v/release/miguelcaravantes/ha-typhur-sync-gold-ble)](https://github.com/miguelcaravantes/ha-typhur-sync-gold-ble/releases)
 [![License](https://img.shields.io/github/license/miguelcaravantes/ha-typhur-sync-gold-ble)](LICENSE)
 
-A Home Assistant custom integration for **Typhur Sync Gold** Bluetooth meat thermometers.
+A Home Assistant custom integration for **Typhur Sync** Bluetooth meat thermometers.
 
 ## Supported Devices
 
 | Model | Device Type | Probes | Tested |
 | :--- | :---: | :---: | :---: |
+| Sync Dual | WT03 | 2 | Yes |
 | Sync Gold Quad | WT04 | 4 | No |
 | Sync Gold Dual | WT05 | 2 | Yes |
 
