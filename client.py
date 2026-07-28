@@ -271,13 +271,6 @@ def decode_application_payload(payload: bytes) -> bytes:
                 "Typhur application package CRC mismatch: "
                 f"expected {package_crc}, got {calculated_package_crc}"
             )
-        _LOGGER.debug(
-            "Typhur: decompressing payload - envelope_len=%s, compressed_len=%s, original_len=%s, first_bytes=%s",
-            len(payload),
-            compressed_length,
-            original_length,
-            payload[:20].hex(),
-        )
         json_payload = _zstd_decompress_with_trailing_byte_fallback(
             compressed, max_output_size=original_length
         )
@@ -466,12 +459,7 @@ class TyphurBleClient:
             self._next_command_sequence(),
         )
         cmd_id = command.get("cmdId")
-        _LOGGER.debug(
-            "Typhur %s: sending auth command with cmdId=%s, userId=%s",
-            self.address,
-            cmd_id,
-            command.get("cmdData", {}).get("userId"),
-        )
+        _LOGGER.debug("Typhur %s: authenticating", self.address)
         
         # Create a future to wait for the receipt
         # We can't rely on exact cmdId match because the device truncates it
@@ -503,21 +491,12 @@ class TyphurBleClient:
         finally:
             self._pending.pop(cmd_id, None)
         
-        _LOGGER.debug(
-            "Typhur %s: auth receipt received: %s",
-            self.address,
-            receipt,
-        )
+        _LOGGER.debug("Typhur %s: auth receipt received", self.address)
         
         # Extract userId from receipt
         discovered_user_id = extract_user_id(receipt)
         if discovered_user_id and discovered_user_id != DUMMY_USER_ID:
             self._last_user_id = discovered_user_id
-            _LOGGER.debug(
-                "Typhur %s: discovered user ID from auth receipt: %s",
-                self.address,
-                discovered_user_id,
-            )
         
         return TyphurAuthResult(
             user_id=discovered_user_id,
@@ -532,12 +511,10 @@ class TyphurBleClient:
         for the status push.
         """
         self._status_event.clear()
-        _LOGGER.debug("Typhur %s: requesting status", self.address)
         command = build_status_command(
             self.address, device_type, self._next_command_sequence()
         )
         await self._send_fire_and_forget(command)
-        _LOGGER.debug("Typhur %s: status request sent, waiting for status push", self.address)
         try:
             async with asyncio.timeout(DEFAULT_COMMAND_TIMEOUT):
                 await self._status_event.wait()
@@ -548,9 +525,6 @@ class TyphurBleClient:
             raise TyphurConnectionError(
                 f"Timed out waiting for status from {self.address}"
             ) from err
-        _LOGGER.debug(
-            "Typhur %s: status push received, returning status", self.address
-        )
         if self._last_status is None:
             raise TyphurConnectionError(
                 f"Status event fired but no status data from {self.address}"
@@ -705,56 +679,20 @@ class TyphurBleClient:
     async def _async_handle_notification(self, data: bytes) -> None:
         """Buffer notification bytes and decode complete BluFi frames."""
         try:
-            _LOGGER.debug(
-                "Received raw Typhur BLE notification from %s: len=%s data=%s",
-                self.address,
-                len(data),
-                data.hex(),
-            )
             self._notification_buffer.extend(data)
-            _LOGGER.debug(
-                "Typhur %s: buffer size=%s, first 4 bytes=%s",
-                self.address,
-                len(self._notification_buffer),
-                self._notification_buffer[:4].hex() if len(self._notification_buffer) >= 4 else "N/A",
-            )
             while len(self._notification_buffer) >= 4:
                 frame_length = 4 + self._notification_buffer[3]
-                _LOGGER.debug(
-                    "Typhur %s: checking frame: buffer=%s frame_length=%s control=0x%02x",
-                    self.address,
-                    len(self._notification_buffer),
-                    frame_length,
-                    self._notification_buffer[1],
-                )
                 if len(self._notification_buffer) < frame_length:
-                    _LOGGER.debug(
-                        "Typhur %s: buffer too small, waiting for more data",
-                        self.address,
-                    )
                     break
                 raw_frame = bytes(self._notification_buffer[:frame_length])
                 del self._notification_buffer[:frame_length]
-                _LOGGER.debug(
-                    "Decoding Typhur frame from %s: len=%s control=0x%02x",
-                    self.address,
-                    len(raw_frame),
-                    raw_frame[1],
-                )
                 frame = decode_frame(raw_frame, self._aes_key)
                 self._handle_frame(frame, raw_frame)
         except (json.JSONDecodeError, TyphurError, TyphurParseError) as err:
-            _LOGGER.warning("Failed to process Typhur notification: %s", err)
+            _LOGGER.debug("Failed to process Typhur notification: %s", err)
 
     def _handle_frame(self, frame: BluFiFrame, raw_frame: bytes) -> None:
         """Handle a decoded BluFi frame."""
-        _LOGGER.debug(
-            "Handling Typhur frame from %s: type=0x%02x control=0x%02x len=%s",
-            self.address,
-            frame.frame_type,
-            frame.control,
-            len(frame.payload),
-        )
         try:
             if frame.frame_type == FRAME_TYPE_DH_PUBLIC_KEY:
                 payload = (
@@ -809,9 +747,9 @@ class TyphurBleClient:
             self._handle_message(message)
         except TyphurProtocolError as err:
             self._fragment_assembler.reset()
-            _LOGGER.warning("Failed to process Typhur frame: %s", err)
+            _LOGGER.debug("Failed to process Typhur frame: %s", err)
         except (json.JSONDecodeError, TyphurError, TyphurParseError) as err:
-            _LOGGER.warning("Failed to process Typhur frame: %s", err)
+            _LOGGER.debug("Failed to process Typhur frame: %s", err)
 
     def _handle_dh_public_key(self, payload: bytes) -> None:
         """Handle the device's DH public key payload."""
@@ -828,21 +766,6 @@ class TyphurBleClient:
 
     def _handle_message(self, message: dict[str, Any]) -> None:
         """Route a decoded message to pending commands and listeners."""
-        import json as _json
-        try:
-            msg_str = _json.dumps(message, indent=2)
-            _LOGGER.debug(
-                "Typhur %s: handling message cmdType=%s\n%s",
-                self.address,
-                message.get("cmdType"),
-                msg_str[:2000],
-            )
-        except Exception:
-            _LOGGER.debug(
-                "Typhur %s: handling message cmdType=%s (could not serialize)",
-                self.address,
-                message.get("cmdType"),
-            )
         matched_future: asyncio.Future[dict[str, Any]] | None = None
         cmd_id = message.get("cmdId")
         if isinstance(cmd_id, str):
@@ -864,22 +787,14 @@ class TyphurBleClient:
 
         user_id = message.get("userId")
         if isinstance(user_id, str) and user_id and user_id != self._last_user_id:
-            _LOGGER.debug(
-                "Typhur %s: discovered user ID from receipt: %s",
-                self.address,
-                user_id,
-            )
             self._last_user_id = user_id
 
         cmd_type = message.get("cmdType")
         if isinstance(cmd_type, str) and "status" in cmd_type:
-            _LOGGER.debug(
-                "Typhur %s: received status cmdType=%s", self.address, cmd_type
-            )
             try:
                 status = parse_status_response(message)
             except TyphurParseError as err:
-                _LOGGER.warning("Ignoring invalid Typhur status response: %s", err)
+                _LOGGER.debug("Ignoring invalid Typhur status response: %s", err)
             else:
                 _LOGGER.debug(
                     "Typhur %s: status decoded successfully, probes=%s",

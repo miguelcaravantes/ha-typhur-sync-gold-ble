@@ -6,8 +6,10 @@ import importlib
 import logging
 import sys
 
+from homeassistant.components import bluetooth
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryNotReady
 
 from .const import DOMAIN, PLATFORMS
 
@@ -45,6 +47,9 @@ from .coordinator import TyphurDataUpdateCoordinator
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Typhur Sync Gold BLE from a config entry."""
+    if bluetooth.async_scanner_count(hass, connectable=True) <= 0:
+        raise ConfigEntryNotReady("No connectable Bluetooth adapter is available")
+
     coordinator = TyphurDataUpdateCoordinator(hass, entry)
     await coordinator.async_config_entry_first_refresh()
 

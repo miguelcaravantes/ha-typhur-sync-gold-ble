@@ -1,7 +1,7 @@
 {
   "domain": "typhur_sync_gold_ble",
   "name": "Typhur Sync Gold BLE",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "config_flow": true,
   "documentation": "https://github.com/miguelcaravantes/ha-typhur-sync-gold-ble",
   "issue_tracker": "https://github.com/miguelcaravantes/ha-typhur-sync-gold-ble/issues",

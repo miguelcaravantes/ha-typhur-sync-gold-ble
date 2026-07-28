@@ -10,7 +10,6 @@ from homeassistant.components import bluetooth
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_ADDRESS, CONF_NAME
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .client import (
@@ -63,8 +62,6 @@ class TyphurDataUpdateCoordinator(DataUpdateCoordinator[BaseStationStatus | None
 
     async def _async_setup(self) -> None:
         """Set up Bluetooth availability tracking."""
-        if bluetooth.async_scanner_count(self.hass, connectable=True) <= 0:
-            raise ConfigEntryNotReady("No connectable Bluetooth adapter is available")
         self._unavailable_cancel = bluetooth.async_track_unavailable(
             self.hass, self._async_unavailable_callback, self.address, connectable=True
         )
@@ -74,7 +71,7 @@ class TyphurDataUpdateCoordinator(DataUpdateCoordinator[BaseStationStatus | None
         try:
             return await self._async_fetch_status()
         except (TyphurConnectionError, TyphurError) as first_err:
-            _LOGGER.warning(
+            _LOGGER.debug(
                 "Typhur %s: update failed, resetting BLE session and retrying once: %s",
                 self.address,
                 first_err,
@@ -98,10 +95,9 @@ class TyphurDataUpdateCoordinator(DataUpdateCoordinator[BaseStationStatus | None
 
         # If we discovered a new user_id, save it and retry auth
         if auth_result.user_id and auth_result.user_id != self.user_id:
-            _LOGGER.warning(
-                "Typhur %s: discovered user ID %s, saving and retrying auth",
+            _LOGGER.debug(
+                "Typhur %s: discovered and saved a user ID; retrying authentication",
                 self.address,
-                auth_result.user_id,
             )
             self.user_id = auth_result.user_id
             self._async_update_entry_data({CONF_USER_ID: self.user_id})
@@ -171,7 +167,7 @@ class TyphurDataUpdateCoordinator(DataUpdateCoordinator[BaseStationStatus | None
             and not self._unavailable_refresh_task.done()
         ):
             return
-        _LOGGER.warning(
+        _LOGGER.debug(
             "Typhur %s: BLE connection became unavailable; scheduling reconnect",
             self.address,
         )
