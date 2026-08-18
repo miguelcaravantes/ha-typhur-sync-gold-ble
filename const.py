@@ -24,12 +24,14 @@ WRITE_CHARACTERISTIC_UUID = "0000ff01-0000-1000-8000-00805f9b34fb"
 NOTIFY_CHARACTERISTIC_UUID = "0000ff02-0000-1000-8000-00805f9b34fb"
 
 DEVICE_TYPE_PROBE_COUNTS = {
+    "WT01": 1,
     "WT03": 2,
     "WT04": 4,
     "WT05": 2,
 }
 
 DEVICE_TYPE_MODEL_NAMES = {
+    "WT01": "Sync One (WT01)",
     "WT03": "Sync Dual (WT03)",
     "WT04": "Sync Gold Quad (WT04)",
     "WT05": "Sync Gold Dual (WT05)",
