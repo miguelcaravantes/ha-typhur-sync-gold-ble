@@ -13,6 +13,7 @@ A Home Assistant custom integration for **Typhur Sync** Bluetooth meat thermomet
 | Sync Dual | WT03 | 2 | Yes |
 | Sync Gold Quad | WT04 | 4 | No |
 | Sync Gold Dual | WT05 | 2 | Yes |
+| Sync Gold Lite | WT10 | 1 | Yes |
 
 ## Entities
 

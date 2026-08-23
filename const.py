@@ -28,6 +28,7 @@ DEVICE_TYPE_PROBE_COUNTS = {
     "WT03": 2,
     "WT04": 4,
     "WT05": 2,
+    "WT10": 1,
 }
 
 DEVICE_TYPE_MODEL_NAMES = {
@@ -35,6 +36,7 @@ DEVICE_TYPE_MODEL_NAMES = {
     "WT03": "Sync Dual (WT03)",
     "WT04": "Sync Gold Quad (WT04)",
     "WT05": "Sync Gold Dual (WT05)",
+    "WT10": "Sync Gold Lite (WT10)",
 }
 
 DEFAULT_SCAN_DURATION = 10
