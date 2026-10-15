@@ -18,7 +18,7 @@ from homeassistant.const import (
     UnitOfTemperature,
     UnitOfTime,
 )
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN
@@ -173,17 +173,40 @@ async def async_setup_entry(
 ) -> None:
     """Set up Typhur sensors."""
     coordinator: TyphurDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]
-    probe_count = coordinator.probe_count or (coordinator.data.discovered_probe_count if coordinator.data else 0)
+    added_probes = 0
     entities: list[SensorEntity] = [
         TyphurBaseSensor(coordinator, description)
         for description in BASE_SENSOR_DESCRIPTIONS
     ]
-    for probe_index in range(probe_count):
+
+    @callback
+    def _async_add_discovered_probes() -> None:
+        nonlocal added_probes
+        target_probes = coordinator.probe_count or (
+            coordinator.data.discovered_probe_count if coordinator.data else 0
+        )
+        if target_probes <= added_probes:
+            return
+        new_entities: list[SensorEntity] = []
+        for probe_index in range(added_probes, target_probes):
+            new_entities.extend(
+                TyphurProbeSensor(coordinator, probe_index, description)
+                for description in PROBE_SENSOR_DESCRIPTIONS + AREA_SENSOR_DESCRIPTIONS
+            )
+        added_probes = target_probes
+        async_add_entities(new_entities)
+
+    initial_probes = coordinator.probe_count or (
+        coordinator.data.discovered_probe_count if coordinator.data else 0
+    )
+    for probe_index in range(initial_probes):
         entities.extend(
             TyphurProbeSensor(coordinator, probe_index, description)
             for description in PROBE_SENSOR_DESCRIPTIONS + AREA_SENSOR_DESCRIPTIONS
         )
+    added_probes = initial_probes
     async_add_entities(entities)
+    entry.async_on_unload(coordinator.async_add_listener(_async_add_discovered_probes))
 
 
 class TyphurBaseSensor(TyphurEntity, SensorEntity):

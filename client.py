@@ -17,7 +17,6 @@ from typing import Any
 from bleak import BleakClient, BleakError
 from bleak_retry_connector import (
     BleakClientWithServiceCache,
-    BleakScanner,
     establish_connection,
 )
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
@@ -386,10 +385,6 @@ class TyphurBleClient:
         ble_device = bluetooth.async_ble_device_from_address(
             self.hass, self.address, connectable=True
         )
-        if ble_device is None:
-            ble_device = await BleakScanner.find_device_by_address(
-                self.address, timeout=10.0
-            )
         if ble_device is None:
             raise TyphurConnectionError(f"No connectable BLE device for {self.address}")
         client = None
