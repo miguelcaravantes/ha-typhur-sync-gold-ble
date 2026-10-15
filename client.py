@@ -21,6 +21,7 @@ from bleak_retry_connector import (
 )
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from homeassistant.components import bluetooth
+from homeassistant.const import UnitOfTemperature
 from homeassistant.core import HomeAssistant, callback
 
 from .const import (
@@ -449,9 +450,17 @@ class TyphurBleClient:
         Sends the trust command and waits for the receipt. If the receipt
         contains a different userId, we extract it for the caller to use.
         """
+        temperature_unit = (
+            "C"
+            if self.hass.config.units.temperature_unit == UnitOfTemperature.CELSIUS
+            else "F"
+        )
         command = build_auth_command(
-            self.address, device_type, user_id or DUMMY_USER_ID,
+            self.address,
+            device_type,
+            user_id or DUMMY_USER_ID,
             self._next_command_sequence(),
+            temperature_unit=temperature_unit,
         )
         cmd_id = command.get("cmdId")
         _LOGGER.debug("Typhur %s: authenticating", self.address)
