@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Callable
+from datetime import timedelta
 import logging
 import time
 
@@ -11,6 +12,7 @@ from homeassistant.components import bluetooth
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_ADDRESS, CONF_NAME
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from .client import (
@@ -32,6 +34,7 @@ from .parser import device_type_from_name, normalize_address
 
 _LOGGER = logging.getLogger(__name__)
 ADVERTISEMENT_RECONNECT_COOLDOWN = 15.0
+PRESENCE_POLL_INTERVAL = timedelta(seconds=5)
 
 
 class TyphurDataUpdateCoordinator(DataUpdateCoordinator[BaseStationStatus | None]):
@@ -59,6 +62,7 @@ class TyphurDataUpdateCoordinator(DataUpdateCoordinator[BaseStationStatus | None
             unavailable_callback=self._async_device_unavailable,
         )
         self._advertisement_cancel: Callable[[], None] | None = None
+        self._presence_cancel: Callable[[], None] | None = None
         self._unavailable_cancel: Callable[[], None] | None = None
         self._unavailable_refresh_task: asyncio.Task[None] | None = None
         self._last_connect_attempt = 0.0
@@ -83,6 +87,11 @@ class TyphurDataUpdateCoordinator(DataUpdateCoordinator[BaseStationStatus | None
             self._async_bluetooth_advertisement,
             bluetooth.BluetoothCallbackMatcher(address=self.address, connectable=True),
             bluetooth.BluetoothScanningMode.ACTIVE,
+        )
+        self._presence_cancel = async_track_time_interval(
+            self.hass,
+            self._async_check_ble_presence,
+            PRESENCE_POLL_INTERVAL,
         )
 
     def _is_ble_device_present(self) -> bool:
@@ -190,6 +199,9 @@ class TyphurDataUpdateCoordinator(DataUpdateCoordinator[BaseStationStatus | None
         if self._advertisement_cancel is not None:
             self._advertisement_cancel()
             self._advertisement_cancel = None
+        if self._presence_cancel is not None:
+            self._presence_cancel()
+            self._presence_cancel = None
         if self._unavailable_cancel is not None:
             self._unavailable_cancel()
             self._unavailable_cancel = None
@@ -229,7 +241,8 @@ class TyphurDataUpdateCoordinator(DataUpdateCoordinator[BaseStationStatus | None
     @callback
     def _async_device_unavailable(self) -> None:
         """Handle client-level unavailable notifications."""
-        self._disconnected_at = time.monotonic()
+        self._disconnected_at = time.monotonic() + 1.0
+        self._last_connect_attempt = 0.0
         if (
             self._unavailable_refresh_task is not None
             and not self._unavailable_refresh_task.done()
@@ -257,6 +270,7 @@ class TyphurDataUpdateCoordinator(DataUpdateCoordinator[BaseStationStatus | None
     ) -> None:
         """Handle Home Assistant Bluetooth unavailability tracking."""
         self._disconnected_at = time.monotonic()
+        self._last_connect_attempt = 0.0
         _LOGGER.debug("Typhur %s: Bluetooth device marked unavailable", self.address)
         if self.data is not None:
             self.async_set_updated_data(None)
@@ -268,7 +282,18 @@ class TyphurDataUpdateCoordinator(DataUpdateCoordinator[BaseStationStatus | None
         _change: bluetooth.BluetoothChange,
     ) -> None:
         """Reconnect when a powered-off device starts advertising again."""
-        self._disconnected_at = 0.0
+        self._async_schedule_reconnect()
+
+    @callback
+    def _async_check_ble_presence(self, _now: object) -> None:
+        """Check whether a disconnected device has broadcast a fresh advertisement."""
+        if self.client.is_connected or not self._is_ble_device_present():
+            return
+        self._async_schedule_reconnect()
+
+    @callback
+    def _async_schedule_reconnect(self) -> None:
+        """Schedule a coordinator refresh when the device is seen advertising."""
         if self.client.is_connected:
             return
         if (
@@ -278,8 +303,9 @@ class TyphurDataUpdateCoordinator(DataUpdateCoordinator[BaseStationStatus | None
             return
         if time.monotonic() - self._last_connect_attempt < ADVERTISEMENT_RECONNECT_COOLDOWN:
             return
+        self._disconnected_at = 0.0
         _LOGGER.debug(
-            "Typhur %s: BLE advertisement received while disconnected; scheduling refresh",
+            "Typhur %s: BLE advertisement detected while disconnected; scheduling refresh",
             self.address,
         )
         self._last_connect_attempt = time.monotonic()
